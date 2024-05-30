@@ -1,10 +1,14 @@
 import streamlit as st
 import requests
-import joblib  # 导入joblib用于加载模型和Scaler
+import joblib
+import pandas as pd
 
 # 加载模型和Scaler
 scaler = joblib.load('scaler.pkl')
 model = joblib.load('treebag_model.pkl')
+
+# 确认特征名称和顺序
+expected_features = list(scaler.feature_names_in_)
 
 # 创建Web应用的标题
 st.title('Machine learning-based model predicts 1-year mortality in patients with type A aortic dissection')
@@ -45,27 +49,29 @@ normal_ranges = {
 if submit_button:
     # 构建请求数据
     data = {
-        "WBC (10^9/L)": wbc,
         "age": age,
+        "WBC (10^9/L)": wbc,
         "Lym (10^9/L)": lym,
         "CO2-Bp(mmol/L)": co2_bp,
         "Eos": eos,
+        "SBP(mmHg)": sbp,
         "β-receptor blocker(1yes，0no)": beta_blocker,
-        "surgery therapy(1yes,0no)": surgery,
-        "SBP(mmHg)": sbp
+        "surgery therapy(1yes,0no)": surgery
     }
 
+    # 将数据转换为DataFrame并提供列名，确保特征顺序与拟合时一致
+    input_df = pd.DataFrame([data], columns=expected_features)
+
     # 预处理数据并进行预测
-    input_features = [data['age'], data['WBC (10^9/L)'], data['Lym (10^9/L)'], data['CO2-Bp(mmol/L)'], data['Eos'], data['SBP(mmHg)'], data['β-receptor blocker(1yes，0no)'], data['surgery therapy(1yes,0no)']]
-    scaled_features = scaler.transform([input_features])
+    scaled_features = scaler.transform(input_df)
     prediction = model.predict_proba(scaled_features)[:, 1]  # 获取类别为1的预测概率
 
-    # 显示预测结果
-    risk_score = prediction[0]
-    st.write(f'Prediction (Probability of being high risk): {risk_score:.8f}')
+    # 显示预测结果，格式化为百分比
+    risk_score = prediction[0] * 100
+    st.write(f'Prediction : {risk_score:.2f}%')
 
     # 提供个性化建议
-    if risk_score >= 0.379:
+    if risk_score >= 37.9:
         st.markdown(
             "<span style='color:red'>High risk: This patient is classified as a high-risk patient.</span>",
             unsafe_allow_html=True)
@@ -79,7 +85,7 @@ if submit_button:
                     unsafe_allow_html=True)
             elif value > normal_max:
                 st.markdown(
-                    f"<span style='color:red'>{feature}: Your value is {value}. It is higher than the normal range ({normal_min} - {normal_max}). Consider decreasing it towards {normal_max}.</span>",
+                    f"<span style='color:red'>{feature}: Your value is {value}. It is higher than the normal range ({normal_min} - {normal_max}). Consider decreasing it towards {normal_max}。</span>",
                     unsafe_allow_html=True)
             else:
                 st.write(f"{feature}: Your value is within the normal range ({normal_min} - {normal_max}).")
